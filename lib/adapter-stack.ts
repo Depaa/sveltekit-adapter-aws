@@ -185,7 +185,7 @@ export class AWSAdapterStack extends Stack {
       onEventHandler: customLambda,
     });
 
-    return new CustomResource(this, name, {
+    return new CustomResource(this, `${name}-custom-resource`, {
       serviceToken: customResourceProvider.serviceToken,
     });
   }
