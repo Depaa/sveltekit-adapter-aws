@@ -1,14 +1,14 @@
 {
-  "name": "sveltekit-adapter-aws",
+  "name": "@mdepascale/sveltekit-adapter-aws",
   "description": "SvelteKit to deploy your project using AWS CDK.",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MikeBild/sveltekit-adapter-aws.git"
+    "url": "git+https://github.com/Depaa/sveltekit-adapter-aws.git"
   },
   "bugs": {
-    "url": "https://github.com/MikeBild/sveltekit-adapter-aws/issues"
+    "url": "https://github.com/Depaa/sveltekit-adapter-aws/issues"
   },
-  "homepage": "https://github.com/MikeBild/sveltekit-adapter-aws#readme",
+  "homepage": "https://github.com/Depaa/sveltekit-adapter-aws#readme",
   "license": "MIT",
   "keywords": [
     "sveltekit",
@@ -16,8 +16,8 @@
     "aws",
     "cdk"
   ],
-  "author": "mike.bild@gmail.com",
-  "version": "4.5.1",
+  "author": "Matteo Depascale",
+  "version": "0.1.2",
   "main": "./index.js",
   "types": "./index.d.ts",
   "bin": {
@@ -26,7 +26,8 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "deploy": "npm version patch --no-git-tag-version && npm publish --access public"
   },
   "devDependencies": {
     "@types/fs-extra": "11.0.1",

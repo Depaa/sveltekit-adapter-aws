@@ -4,7 +4,17 @@ import { spawnSync } from 'child_process';
 import * as esbuild from 'esbuild';
 import { config } from 'dotenv';
 import { writeFileSync } from 'fs';
+import { Duration } from 'aws-cdk-lib';
+import { Architecture, Runtime } from 'aws-cdk-lib/aws-lambda';
 const updateDotenv = require('update-dotenv');
+
+export interface AWSLambdaAdapterProps {
+  memorySize?: number;
+  logRetentionDays?: number;
+  timeout?: Duration;
+  runtime?: Runtime;
+  architecture?: Architecture;
+}
 
 export interface AWSAdapterProps {
   artifactPath?: string;
@@ -17,6 +27,7 @@ export interface AWSAdapterProps {
   MEMORY_SIZE?: number;
   zoneName?: string;
   env?: { [key: string]: string };
+  lambdaConfig?: AWSLambdaAdapterProps;
 }
 
 export function adapter({
@@ -30,6 +41,7 @@ export function adapter({
   MEMORY_SIZE,
   zoneName = '',
   env = {},
+  lambdaConfig,
 }: AWSAdapterProps = {}) {
   /** @type {import('@sveltejs/kit').Adapter} */
   return {
@@ -129,6 +141,7 @@ export function adapter({
                 LOG_RETENTION_DAYS,
                 MEMORY_SIZE,
                 ZONE_NAME: zoneName,
+                LAMBDA_CONFIG: lambdaConfig
               },
               process.env,
               env

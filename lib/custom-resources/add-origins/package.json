@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "cfn-response": "^1.0.1"
+  },
+  "devDependencies": {
+    "aws-sdk": "^2.1190.0"
+  }
+}

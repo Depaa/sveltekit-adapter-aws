@@ -6,19 +6,24 @@ import {
   RemovalPolicy,
   Duration,
   CfnOutput,
-  aws_lambda,
-  aws_s3,
-  aws_s3_deployment,
-  aws_cloudfront_origins,
   aws_certificatemanager,
-  aws_route53,
-  aws_route53_targets,
-  aws_cloudfront,
+  CustomResource,
 } from 'aws-cdk-lib';
 import { CorsHttpMethod, HttpApi, IHttpApi, PayloadFormatVersion } from '@aws-cdk/aws-apigatewayv2-alpha';
 import { HttpLambdaIntegration } from '@aws-cdk/aws-apigatewayv2-integrations-alpha';
 import { config } from 'dotenv';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { AWSLambdaAdapterProps } from '../adapter';
+import { AssetCode, Code, Function, IFunction, Runtime } from 'aws-cdk-lib/aws-lambda';
+import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
+import { ARecord, HostedZone, IHostedZone, RecordTarget } from 'aws-cdk-lib/aws-route53';
+import { CloudFrontTarget } from 'aws-cdk-lib/aws-route53-targets';
+import { AllowedMethods, CachePolicy, Distribution, OriginProtocolPolicy, OriginRequestCookieBehavior, OriginRequestHeaderBehavior, OriginRequestPolicy, OriginRequestQueryStringBehavior, PriceClass, SSLMethod, ViewerProtocolPolicy } from 'aws-cdk-lib/aws-cloudfront';
+import { Bucket, IBucket } from 'aws-cdk-lib/aws-s3';
+import { HttpOrigin, S3Origin } from 'aws-cdk-lib/aws-cloudfront-origins';
+import { ICertificate } from 'aws-cdk-lib/aws-certificatemanager';
+import { Provider } from 'aws-cdk-lib/custom-resources';
+import path from 'path';
 
 export interface AWSAdapterStackProps extends StackProps {
   FQDN: string;
@@ -29,11 +34,11 @@ export interface AWSAdapterStackProps extends StackProps {
 }
 
 export class AWSAdapterStack extends Stack {
-  bucket: aws_s3.IBucket;
-  serverHandler: aws_lambda.IFunction;
+  bucket: IBucket;
+  serverHandler: IFunction;
   httpApi: IHttpApi;
-  hostedZone: aws_route53.IHostedZone;
-  certificate: aws_certificatemanager.ICertificate;
+  hostedZone: IHostedZone;
+  certificate: ICertificate;
 
   constructor(scope: Construct, id: string, props: AWSAdapterStackProps) {
     super(scope, id, props);
@@ -43,19 +48,18 @@ export class AWSAdapterStack extends Stack {
     const serverPath = process.env.SERVER_PATH;
     const staticPath = process.env.STATIC_PATH;
     const prerenderedPath = process.env.PRERENDERED_PATH;
-    const logRetention = parseInt(process.env.LOG_RETENTION_DAYS!) || 7;
-    const memorySize = parseInt(process.env.MEMORY_SIZE!) || 128;
     const environment = config({ path: projectPath });
     const [_, zoneName, ...MLDs] = process.env.FQDN?.split('.') || [];
     const domainName = [zoneName, ...MLDs].join(".");
+    const lambdaConfig = process.env.LAMBDA_CONFIG as AWSLambdaAdapterProps;
 
-    this.serverHandler = new aws_lambda.Function(this, 'LambdaServerFunctionHandler', {
-      code: new aws_lambda.AssetCode(serverPath!),
+    this.serverHandler = new Function(this, 'LambdaServerFunctionHandler', {
+      code: new AssetCode(serverPath!),
       handler: 'index.handler',
-      runtime: aws_lambda.Runtime.NODEJS_16_X,
-      timeout: Duration.minutes(15),
-      memorySize,
-      logRetention,
+      runtime: lambdaConfig.runtime || Runtime.NODEJS_18_X,
+      timeout: lambdaConfig.timeout ||  Duration.minutes(15),
+      memorySize: lambdaConfig.memorySize || 1024,
+      logRetention: lambdaConfig.logRetentionDays || 14,
       environment: {
         ...environment.parsed,
       } as any,
@@ -75,15 +79,15 @@ export class AWSAdapterStack extends Stack {
       }),
     });
 
-    this.bucket = new aws_s3.Bucket(this, 'StaticContentBucket', {
+    this.bucket = new Bucket(this, 'StaticContentBucket', {
       removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
 
     if (process.env.FQDN) {
-      this.hostedZone = aws_route53.HostedZone.fromLookup(this, 'HostedZone', {
+      this.hostedZone = HostedZone.fromLookup(this, 'HostedZone', {
         domainName,
-      }) as aws_route53.HostedZone;
+      }) as HostedZone;
 
       this.certificate = new aws_certificatemanager.DnsValidatedCertificate(this, 'DnsValidatedCertificate', {
         domainName: process.env.FQDN!,
@@ -92,11 +96,11 @@ export class AWSAdapterStack extends Stack {
       });
     }
 
-    const distribution = new aws_cloudfront.Distribution(this, 'CloudFrontDistribution', {
-      priceClass: aws_cloudfront.PriceClass.PRICE_CLASS_100,
+    const distribution = new Distribution(this, 'CloudFrontDistribution', {
+      priceClass: PriceClass.PRICE_CLASS_100,
       enabled: true,
       defaultRootObject: '',
-      sslSupportMethod: aws_cloudfront.SSLMethod.SNI,
+      sslSupportMethod: SSLMethod.SNI,
       domainNames: process.env.FQDN ? [process.env.FQDN!] : [],
       certificate: process.env.FQDN
         ? aws_certificatemanager.Certificate.fromCertificateArn(
@@ -107,15 +111,15 @@ export class AWSAdapterStack extends Stack {
         : undefined,
       defaultBehavior: {
         compress: true,
-        origin: new aws_cloudfront_origins.HttpOrigin(Fn.select(1, Fn.split('://', this.httpApi.apiEndpoint)), {
-          protocolPolicy: aws_cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+        origin: new HttpOrigin(Fn.select(1, Fn.split('://', this.httpApi.apiEndpoint)), {
+          protocolPolicy: OriginProtocolPolicy.HTTPS_ONLY,
         }),
-        viewerProtocolPolicy: aws_cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        allowedMethods: aws_cloudfront.AllowedMethods.ALLOW_ALL,
-        originRequestPolicy: new aws_cloudfront.OriginRequestPolicy(this, 'OriginRequestPolicy', {
-          cookieBehavior: aws_cloudfront.OriginRequestCookieBehavior.all(),
-          queryStringBehavior: aws_cloudfront.OriginRequestQueryStringBehavior.all(),
-          headerBehavior: aws_cloudfront.OriginRequestHeaderBehavior.allowList(
+        viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        allowedMethods: AllowedMethods.ALLOW_ALL,
+        originRequestPolicy: new OriginRequestPolicy(this, 'OriginRequestPolicy', {
+          cookieBehavior: OriginRequestCookieBehavior.all(),
+          queryStringBehavior: OriginRequestQueryStringBehavior.all(),
+          headerBehavior: OriginRequestHeaderBehavior.allowList(
             'Origin',
             'Accept-Charset',
             'Accept',
@@ -126,41 +130,63 @@ export class AWSAdapterStack extends Stack {
             'Accept-Datetime'
           ),
         }),
-        cachePolicy: aws_cloudfront.CachePolicy.CACHING_DISABLED,
+        cachePolicy: CachePolicy.CACHING_DISABLED,
       },
     });
 
-    const s3Origin = new aws_cloudfront_origins.S3Origin(this.bucket, {});
+    const s3Origin = new S3Origin(this.bucket, {});
     routes.forEach((route) => {
       distribution.addBehavior(route, s3Origin, {
-        viewerProtocolPolicy: aws_cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        allowedMethods: aws_cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
-        originRequestPolicy: aws_cloudfront.OriginRequestPolicy.USER_AGENT_REFERER_HEADERS,
-        cachePolicy: aws_cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        allowedMethods: AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+        originRequestPolicy: OriginRequestPolicy.USER_AGENT_REFERER_HEADERS,
+        cachePolicy: CachePolicy.CACHING_OPTIMIZED,
       });
     });
 
     if (process.env.FQDN) {
-      new aws_route53.ARecord(this, 'ARecord', {
+      new ARecord(this, 'ARecord', {
         recordName: process.env.FQDN,
-        target: aws_route53.RecordTarget.fromAlias(new aws_route53_targets.CloudFrontTarget(distribution)),
+        target: RecordTarget.fromAlias(new CloudFrontTarget(distribution)),
         zone: this.hostedZone,
       });
     }
 
-    new aws_s3_deployment.BucketDeployment(this, 'StaticContentDeployment', {
+    new BucketDeployment(this, 'StaticContentDeployment', {
       destinationBucket: this.bucket,
-      sources: [aws_s3_deployment.Source.asset(staticPath!), aws_s3_deployment.Source.asset(prerenderedPath!)],
+      sources: [Source.asset(staticPath!), Source.asset(prerenderedPath!)],
       retainOnDelete: false,
       prune: true,
       distribution,
       distributionPaths: ['/*'],
     });
+    
+    this.createCustomResource('add-static-origin', './custom-resources/add-origins');
 
     new CfnOutput(this, 'appUrl', {
       value: process.env.FQDN ? `https://${process.env.FQDN}` : `https://${distribution.domainName}`,
     });
 
     new CfnOutput(this, 'stackName', { value: id });
+  }
+
+
+  private createCustomResource(name: string, filePath: string): CustomResource {
+    const customLambda = new Function(this, name, {
+      functionName: `${name}`,
+      runtime: Runtime.NODEJS_18_X,
+      timeout: Duration.seconds(30),
+      code: Code.fromAsset(path.join(__dirname, filePath)),
+      handler: 'index.handler',
+      environment: {}
+    });
+
+    const customResourceProvider = new Provider(this, `${name}-provider`, {
+      onEventHandler: customLambda,
+    });
+
+    return new CustomResource(this, name, {
+      serviceToken: customResourceProvider.serviceToken,
+    });
   }
 }
