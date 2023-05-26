@@ -17,7 +17,7 @@
     "cdk"
   ],
   "author": "Matteo Depascale",
-  "version": "0.1.2",
+  "version": "0.0.2",
   "main": "./index.js",
   "types": "./index.d.ts",
   "bin": {
@@ -27,7 +27,7 @@
     "build": "tsc",
     "watch": "tsc -w",
     "format": "prettier --write .",
-    "deploy": "npm version patch --no-git-tag-version && npm publish --access public"
+    "deploy": "npm version patch --no-git-tag-version && npm run build && npm publish --access public"
   },
   "devDependencies": {
     "@types/fs-extra": "11.0.1",
