@@ -90,9 +90,9 @@ export class AWSAdapterStack extends Stack {
     this.serverHandler = new Function(this, 'LambdaServerFunctionHandler', {
       code: new AssetCode(serverPath!),
       handler: 'index.handler',
-      runtime: props.lambdaConfig.runtime!,
+      runtime: props.lambdaConfig.runtime! as Runtime,
       timeout: Duration.seconds(props.lambdaConfig.timeout!),
-      architecture: props.lambdaConfig.architecture,
+      architecture: props.lambdaConfig.architecture as Architecture,
       memorySize: props.lambdaConfig.memorySize,
       logRetention: props.lambdaConfig.logRetentionDays,
       environment: {
