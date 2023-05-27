@@ -12,7 +12,7 @@ const updateDotenv = require('update-dotenv');
 export interface AWSLambdaAdapterProps {
   memorySize?: number;
   logRetentionDays?: number;
-  timeout?: Duration;
+  timeout?: number;
   runtime?: Runtime;
   architecture?: Architecture;
 }

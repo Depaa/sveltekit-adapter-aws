@@ -14,7 +14,7 @@ import { HttpLambdaIntegration } from '@aws-cdk/aws-apigatewayv2-integrations-al
 import { config } from 'dotenv';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { AWSCachingProps, AWSCloudFrontProps, AWSLambdaAdapterProps } from '../adapter';
-import { AssetCode, Code, Function, IFunction, Runtime } from 'aws-cdk-lib/aws-lambda';
+import { Architecture, AssetCode, Code, Function, IFunction, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import { ARecord, HostedZone, IHostedZone, RecordTarget } from 'aws-cdk-lib/aws-route53';
 import { CloudFrontTarget } from 'aws-cdk-lib/aws-route53-targets';
@@ -67,15 +67,20 @@ export class AWSAdapterStack extends Stack {
     const [_, zoneName, ...MLDs] = process.env.FQDN?.split('.') || [];
     const domainName = [zoneName, ...MLDs].join('.');
 
+    console.log('CDK is building...');
+    console.log(typeof props.lambdaConfig);
     console.log(props.lambdaConfig);
+    console.log(typeof props.cloudfrontConfig);
     console.log(props.cloudfrontConfig);
+    console.log(typeof props.cacheConfig);
     console.log(props.cacheConfig);
 
     this.serverHandler = new Function(this, 'LambdaServerFunctionHandler', {
       code: new AssetCode(serverPath!),
       handler: 'index.handler',
       runtime: props.lambdaConfig.runtime || Runtime.NODEJS_18_X,
-      timeout: props.lambdaConfig.timeout || Duration.minutes(15),
+      timeout: Duration.minutes(props.lambdaConfig.timeout || 15),
+      architecture: props.lambdaConfig.architecture || Architecture.ARM_64,
       memorySize: props.lambdaConfig.memorySize || 1024,
       logRetention: props.lambdaConfig.logRetentionDays || 14,
       environment: {
