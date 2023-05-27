@@ -70,6 +70,11 @@ export class AWSAdapterStack extends Stack {
     console.log('CDK is building...');
     console.log(typeof props.lambdaConfig);
     console.log(props.lambdaConfig);
+    console.log(props.lambdaConfig.runtime);
+    console.log(props.lambdaConfig.timeout);
+    console.log(props.lambdaConfig.architecture);
+    console.log(props.lambdaConfig.memorySize);
+    console.log(props.lambdaConfig.logRetentionDays);
     console.log(typeof props.cloudfrontConfig);
     console.log(props.cloudfrontConfig);
     console.log(typeof props.cacheConfig);
@@ -78,11 +83,11 @@ export class AWSAdapterStack extends Stack {
     this.serverHandler = new Function(this, 'LambdaServerFunctionHandler', {
       code: new AssetCode(serverPath!),
       handler: 'index.handler',
-      runtime: props.lambdaConfig.runtime || Runtime.NODEJS_18_X,
-      timeout: Duration.minutes(props.lambdaConfig.timeout || 15),
-      architecture: props.lambdaConfig.architecture || Architecture.ARM_64,
-      memorySize: props.lambdaConfig.memorySize || 1024,
-      logRetention: props.lambdaConfig.logRetentionDays || 14,
+      runtime: props.lambdaConfig.runtime!,
+      timeout: Duration.seconds(props.lambdaConfig.timeout!),
+      architecture: props.lambdaConfig.architecture,
+      memorySize: props.lambdaConfig.memorySize,
+      logRetention: props.lambdaConfig.logRetentionDays,
       environment: {
         ...environment.parsed,
       } as any,
