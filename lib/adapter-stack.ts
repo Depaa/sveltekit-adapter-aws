@@ -67,7 +67,7 @@ export class AWSAdapterStack extends Stack {
     const [_, zoneName, ...MLDs] = process.env.FQDN?.split('.') || [];
     const domainName = [zoneName, ...MLDs].join('.');
 
-    console.log('CDK is building...');
+    console.log('CDK props');
     console.log(typeof props.lambdaConfig);
     console.log(props.lambdaConfig);
     console.log(props.lambdaConfig.runtime);
@@ -79,6 +79,13 @@ export class AWSAdapterStack extends Stack {
     console.log(props.cloudfrontConfig);
     console.log(typeof props.cacheConfig);
     console.log(props.cacheConfig);
+
+    console.log('CDK env');
+    console.log(typeof process.env.lambdaConfig);
+    console.log(process.env.lambdaConfig);
+    console.log(process.env.cloudfrontConfig);
+    console.log(typeof process.env.cacheConfig);
+    console.log(process.env.cacheConfig);
 
     this.serverHandler = new Function(this, 'LambdaServerFunctionHandler', {
       code: new AssetCode(serverPath!),
