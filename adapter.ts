@@ -6,6 +6,7 @@ import { config } from 'dotenv';
 import { writeFileSync } from 'fs';
 import { Duration } from 'aws-cdk-lib';
 import { Architecture, Runtime } from 'aws-cdk-lib/aws-lambda';
+import { CachePolicyProps, CacheQueryStringBehavior } from 'aws-cdk-lib/aws-cloudfront';
 const updateDotenv = require('update-dotenv');
 
 export interface AWSLambdaAdapterProps {
@@ -14,6 +15,16 @@ export interface AWSLambdaAdapterProps {
   timeout?: Duration;
   runtime?: Runtime;
   architecture?: Architecture;
+}
+
+export interface AWSCachingProps {
+  staticAssets?: CachePolicyProps;
+  distributionDynamic?: CachePolicyProps;
+  distributionStatic?: CachePolicyProps;
+}
+
+export interface AWSCloudFrontProps {
+  distributionId?: string;
 }
 
 export interface AWSAdapterProps {
@@ -28,6 +39,8 @@ export interface AWSAdapterProps {
   zoneName?: string;
   env?: { [key: string]: string };
   lambdaConfig?: AWSLambdaAdapterProps;
+  cloudfrontConfig?: AWSCloudFrontProps;
+  cacheConfig?: AWSCachingProps;
 }
 
 export function adapter({
@@ -41,7 +54,9 @@ export function adapter({
   MEMORY_SIZE,
   zoneName = '',
   env = {},
-  lambdaConfig,
+  lambdaConfig = {},
+  cacheConfig = {},
+  cloudfrontConfig = {},
 }: AWSAdapterProps = {}) {
   /** @type {import('@sveltejs/kit').Adapter} */
   return {
@@ -74,6 +89,7 @@ export function adapter({
       copyFileSync(`${__dirname}/lambda/shims.js`, `${server_directory}/shims.js`);
 
       builder.log.minor('Building AWS Lambda server function.');
+      builder.log.minor(JSON.stringify(esbuildOptions));
       esbuild.buildSync({
         entryPoints: [`${server_directory}/_index.js`],
         outfile: `${server_directory}/index.js`,
@@ -112,6 +128,9 @@ export function adapter({
       writeFileSync(join(artifactPath, 'routes.json'), JSON.stringify(routes));
 
       builder.log.minor('Deploy using AWS-CDK.');
+      builder.log.minor(JSON.stringify(lambdaConfig));
+      builder.log.minor(JSON.stringify(cacheConfig));
+      builder.log.minor(JSON.stringify(cloudfrontConfig));
       autoDeploy &&
         spawnSync(
           'npx',
@@ -141,7 +160,9 @@ export function adapter({
                 LOG_RETENTION_DAYS,
                 MEMORY_SIZE,
                 ZONE_NAME: zoneName,
-                LAMBDA_CONFIG: lambdaConfig
+                LAMBDA_CONFIG: JSON.stringify(lambdaConfig),
+                CACHE_CONFIG: JSON.stringify(cacheConfig),
+                CLOUDFRONT_CONFIG: JSON.stringify(cloudfrontConfig),
               },
               process.env,
               env

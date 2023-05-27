@@ -13,12 +13,24 @@ import { CorsHttpMethod, HttpApi, IHttpApi, PayloadFormatVersion } from '@aws-cd
 import { HttpLambdaIntegration } from '@aws-cdk/aws-apigatewayv2-integrations-alpha';
 import { config } from 'dotenv';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
-import { AWSLambdaAdapterProps } from '../adapter';
+import { AWSCachingProps, AWSCloudFrontProps, AWSLambdaAdapterProps } from '../adapter';
 import { AssetCode, Code, Function, IFunction, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import { ARecord, HostedZone, IHostedZone, RecordTarget } from 'aws-cdk-lib/aws-route53';
 import { CloudFrontTarget } from 'aws-cdk-lib/aws-route53-targets';
-import { AllowedMethods, CachePolicy, Distribution, OriginProtocolPolicy, OriginRequestCookieBehavior, OriginRequestHeaderBehavior, OriginRequestPolicy, OriginRequestQueryStringBehavior, PriceClass, SSLMethod, ViewerProtocolPolicy } from 'aws-cdk-lib/aws-cloudfront';
+import {
+  AllowedMethods,
+  CachePolicy,
+  Distribution,
+  OriginProtocolPolicy,
+  OriginRequestCookieBehavior,
+  OriginRequestHeaderBehavior,
+  OriginRequestPolicy,
+  OriginRequestQueryStringBehavior,
+  PriceClass,
+  SSLMethod,
+  ViewerProtocolPolicy,
+} from 'aws-cdk-lib/aws-cloudfront';
 import { Bucket, IBucket } from 'aws-cdk-lib/aws-s3';
 import { HttpOrigin, S3Origin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { ICertificate } from 'aws-cdk-lib/aws-certificatemanager';
@@ -31,6 +43,9 @@ export interface AWSAdapterStackProps extends StackProps {
   region?: string;
   serverHandlerPolicies?: PolicyStatement[];
   zoneName?: string;
+  lambdaConfig: AWSLambdaAdapterProps;
+  cloudfrontConfig: AWSCloudFrontProps;
+  cacheConfig: AWSCachingProps;
 }
 
 export class AWSAdapterStack extends Stack {
@@ -50,16 +65,19 @@ export class AWSAdapterStack extends Stack {
     const prerenderedPath = process.env.PRERENDERED_PATH;
     const environment = config({ path: projectPath });
     const [_, zoneName, ...MLDs] = process.env.FQDN?.split('.') || [];
-    const domainName = [zoneName, ...MLDs].join(".");
-    const lambdaConfig = process.env.LAMBDA_CONFIG as AWSLambdaAdapterProps;
+    const domainName = [zoneName, ...MLDs].join('.');
+
+    console.log(props.lambdaConfig);
+    console.log(props.cloudfrontConfig);
+    console.log(props.cacheConfig);
 
     this.serverHandler = new Function(this, 'LambdaServerFunctionHandler', {
       code: new AssetCode(serverPath!),
       handler: 'index.handler',
-      runtime: lambdaConfig.runtime || Runtime.NODEJS_18_X,
-      timeout: lambdaConfig.timeout ||  Duration.minutes(15),
-      memorySize: lambdaConfig.memorySize || 1024,
-      logRetention: lambdaConfig.logRetentionDays || 14,
+      runtime: props.lambdaConfig.runtime || Runtime.NODEJS_18_X,
+      timeout: props.lambdaConfig.timeout || Duration.minutes(15),
+      memorySize: props.lambdaConfig.memorySize || 1024,
+      logRetention: props.lambdaConfig.logRetentionDays || 14,
       environment: {
         ...environment.parsed,
       } as any,
@@ -160,7 +178,7 @@ export class AWSAdapterStack extends Stack {
       distribution,
       distributionPaths: ['/*'],
     });
-    
+
     this.createCustomResource('add-static-origin', './custom-resources/add-origins');
 
     new CfnOutput(this, 'appUrl', {
@@ -170,7 +188,6 @@ export class AWSAdapterStack extends Stack {
     new CfnOutput(this, 'stackName', { value: id });
   }
 
-
   private createCustomResource(name: string, filePath: string): CustomResource {
     const customLambda = new Function(this, name, {
       functionName: `${name}`,
@@ -178,7 +195,7 @@ export class AWSAdapterStack extends Stack {
       timeout: Duration.seconds(30),
       code: Code.fromAsset(path.join(__dirname, filePath)),
       handler: 'index.handler',
-      environment: {}
+      environment: {},
     });
 
     const customResourceProvider = new Provider(this, `${name}-provider`, {

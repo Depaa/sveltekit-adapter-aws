@@ -12,4 +12,7 @@ new AWSAdapterStack(app, process.env.STACKNAME!, {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
   },
+  lambdaConfig: JSON.parse(process.env.LAMBDA_CONFIG!),
+  cloudfrontConfig: JSON.parse(process.env.CLOUDFRONT_CONFIG!),
+  cacheConfig: JSON.parse(process.env.CACHE_CONFIG!),
 });
