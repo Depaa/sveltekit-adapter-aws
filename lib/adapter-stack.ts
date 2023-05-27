@@ -36,6 +36,7 @@ import { HttpOrigin, S3Origin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { ICertificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { Provider } from 'aws-cdk-lib/custom-resources';
 import path from 'path';
+import { architectureMapping, runtimeMapping } from './utils';
 
 export interface AWSAdapterStackProps extends StackProps {
   FQDN: string;
@@ -81,20 +82,25 @@ export class AWSAdapterStack extends Stack {
     console.log(props.cacheConfig);
 
     console.log('CDK env');
-    console.log(typeof process.env.lambdaConfig);
-    console.log(process.env.lambdaConfig);
-    console.log(process.env.cloudfrontConfig);
-    console.log(typeof process.env.cacheConfig);
-    console.log(process.env.cacheConfig);
+    console.log(process.env);
+
+    const architectureString = props.lambdaConfig.architecture ?? 'X86_64';
+    const runtimeString = props.lambdaConfig.runtime ?? 'NODEJS_16_X';
+    const runtime =
+      runtimeString in runtimeMapping ? runtimeMapping[runtimeString as keyof typeof runtimeMapping] : Runtime.PROVIDED;
+    const architecture =
+      architectureString in architectureMapping
+        ? architectureMapping[architectureString as keyof typeof architectureMapping]
+        : Architecture.custom(architectureString);
 
     this.serverHandler = new Function(this, 'LambdaServerFunctionHandler', {
       code: new AssetCode(serverPath!),
       handler: 'index.handler',
-      runtime: props.lambdaConfig.runtime! as Runtime,
-      timeout: Duration.seconds(props.lambdaConfig.timeout!),
-      architecture: props.lambdaConfig.architecture as Architecture,
-      memorySize: props.lambdaConfig.memorySize,
-      logRetention: props.lambdaConfig.logRetentionDays,
+      timeout: Duration.seconds(props.lambdaConfig.timeout ?? 900),
+      runtime,
+      architecture,
+      memorySize: props.lambdaConfig.memorySize ?? 1024,
+      logRetention: props.lambdaConfig.logRetentionDays ?? 14,
       environment: {
         ...environment.parsed,
       } as any,

@@ -13,8 +13,8 @@ export interface AWSLambdaAdapterProps {
   memorySize?: number;
   logRetentionDays?: number;
   timeout?: number;
-  runtime?: Runtime;
-  architecture?: Architecture;
+  runtime?: string;
+  architecture?: 'ARM_64' | 'X86_64' | string;
 }
 
 export interface AWSCachingProps {
