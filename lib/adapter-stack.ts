@@ -218,7 +218,7 @@ export class AWSAdapterStack extends Stack {
       queryStringBehavior: CacheQueryStringBehavior.none(),
       headerBehavior: CacheHeaderBehavior.none(),
     });
-    
+
     const distribution = new Distribution(this, `${stackId}-cache`, {
       priceClass: PriceClass.PRICE_CLASS_ALL,
       httpVersion: HttpVersion.HTTP2_AND_3,
@@ -241,21 +241,6 @@ export class AWSAdapterStack extends Stack {
         }),
         viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: AllowedMethods.ALLOW_ALL,
-        originRequestPolicy: new OriginRequestPolicy(this, 'OriginRequestPolicy', {
-          cookieBehavior: OriginRequestCookieBehavior.all(),
-          queryStringBehavior: OriginRequestQueryStringBehavior.all(),
-          headerBehavior: OriginRequestHeaderBehavior.allowList(
-            'Origin',
-            'Accept-Charset',
-            'Accept',
-            'Access-Control-Request-Method',
-            'Access-Control-Request-Headers',
-            'Referer',
-            'Accept-Language',
-            'Accept-Datetime',
-            'Authorization'
-          ),
-        }),
         cachePolicy: dynamicCachePolicy,
       },
     });
