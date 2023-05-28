@@ -13,15 +13,21 @@ import { CorsHttpMethod, HttpApi, IHttpApi, PayloadFormatVersion } from '@aws-cd
 import { HttpLambdaIntegration } from '@aws-cdk/aws-apigatewayv2-integrations-alpha';
 import { config } from 'dotenv';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
-import { AWSCachingProps, AWSExistingResourcesProps, AWSLambdaAdapterProps } from '../adapter';
+import { AWSCachePolicyProps, AWSCachingProps, AWSExistingResourcesProps, AWSLambdaAdapterProps } from '../adapter';
 import { Architecture, AssetCode, Code, Function, IFunction, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { BucketDeployment, CacheControl, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import { ARecord, HostedZone, IHostedZone, RecordTarget } from 'aws-cdk-lib/aws-route53';
 import { CloudFrontTarget } from 'aws-cdk-lib/aws-route53-targets';
 import {
   AllowedMethods,
+  CacheCookieBehavior,
+  CacheHeaderBehavior,
   CachePolicy,
+  CachePolicyProps,
+  CacheQueryStringBehavior,
   Distribution,
+  HttpVersion,
+  ICachePolicy,
   IDistribution,
   OriginProtocolPolicy,
   OriginRequestCookieBehavior,
@@ -30,6 +36,7 @@ import {
   OriginRequestQueryStringBehavior,
   PriceClass,
   SSLMethod,
+  SecurityPolicyProtocol,
   ViewerProtocolPolicy,
 } from 'aws-cdk-lib/aws-cloudfront';
 import { Bucket, IBucket } from 'aws-cdk-lib/aws-s3';
@@ -127,7 +134,13 @@ export class AWSAdapterStack extends Stack {
           region: 'us-east-1',
         });
       }
-      this.distribution = this.createDistribution(id, routes, process.env.FQDN);
+      this.distribution = this.createDistribution(
+        id,
+        routes,
+        process.env.FQDN,
+        props.cacheConfig.distributionDynamic,
+        props.cacheConfig.distributionStatic
+      );
     } else {
       const lambdaEnvironmentVars = {
         DISTRIBUTION_ID: props.existingResources.distributionId,
@@ -165,12 +178,54 @@ export class AWSAdapterStack extends Stack {
     new CfnOutput(this, 'STACK_NAME', { value: id });
   }
 
-  private createDistribution(stackId: string, routes: string[], FQDN?: string): Distribution {
+  private createDistribution(
+    stackId: string,
+    routes: string[],
+    FQDN?: string,
+    dynamicCacheConfig?: AWSCachePolicyProps,
+    staticCacheConfig?: AWSCachePolicyProps
+  ): Distribution {
+    const allowHeaders = [
+      'Origin',
+      'Accept-Charset',
+      'Accept',
+      'Access-Control-Request-Method',
+      'Access-Control-Request-Headers',
+      'Referer',
+      'Accept-Language',
+      'Accept-Datetime',
+      'Authorization',
+    ];
+
+    const defaultTtl = 365;
+
+    const dynamicCachePolicy = new CachePolicy(this, `${stackId}-dynamic-policy`, {
+      comment: dynamicCacheConfig?.comment,
+      defaultTtl: Duration.days(dynamicCacheConfig?.minTtl ?? defaultTtl),
+      minTtl: Duration.days(dynamicCacheConfig?.minTtl ?? defaultTtl),
+      maxTtl: Duration.days(dynamicCacheConfig?.maxTtl ?? defaultTtl),
+      cookieBehavior: CacheCookieBehavior.all(),
+      queryStringBehavior: CacheQueryStringBehavior.all(),
+      headerBehavior: CacheHeaderBehavior.allowList(...allowHeaders),
+    });
+
+    const staticCachePolicy = new CachePolicy(this, `${stackId}-static-policy`, {
+      comment: staticCacheConfig?.comment,
+      defaultTtl: Duration.days(staticCacheConfig?.minTtl ?? defaultTtl),
+      minTtl: Duration.days(staticCacheConfig?.minTtl ?? defaultTtl),
+      maxTtl: Duration.days(staticCacheConfig?.maxTtl ?? defaultTtl),
+      cookieBehavior: CacheCookieBehavior.none(),
+      queryStringBehavior: CacheQueryStringBehavior.none(),
+      headerBehavior: CacheHeaderBehavior.none(),
+    });
+    
     const distribution = new Distribution(this, `${stackId}-cache`, {
-      priceClass: PriceClass.PRICE_CLASS_100,
+      priceClass: PriceClass.PRICE_CLASS_ALL,
+      httpVersion: HttpVersion.HTTP2_AND_3,
+      sslSupportMethod: SSLMethod.SNI,
+      minimumProtocolVersion: SecurityPolicyProtocol.TLS_V1_2_2021,
       enabled: true,
       defaultRootObject: '',
-      sslSupportMethod: SSLMethod.SNI,
       domainNames: FQDN ? [FQDN!] : [],
       certificate: FQDN
         ? aws_certificatemanager.Certificate.fromCertificateArn(
@@ -197,10 +252,11 @@ export class AWSAdapterStack extends Stack {
             'Access-Control-Request-Headers',
             'Referer',
             'Accept-Language',
-            'Accept-Datetime'
+            'Accept-Datetime',
+            'Authorization'
           ),
         }),
-        cachePolicy: CachePolicy.CACHING_DISABLED,
+        cachePolicy: dynamicCachePolicy,
       },
     });
 
@@ -210,7 +266,7 @@ export class AWSAdapterStack extends Stack {
         viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
         originRequestPolicy: OriginRequestPolicy.USER_AGENT_REFERER_HEADERS,
-        cachePolicy: CachePolicy.CACHING_OPTIMIZED,
+        cachePolicy: staticCachePolicy,
       });
     });
 

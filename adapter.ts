@@ -4,7 +4,6 @@ import { spawnSync } from 'child_process';
 import * as esbuild from 'esbuild';
 import { config } from 'dotenv';
 import { writeFileSync } from 'fs';
-import { CachePolicyProps } from 'aws-cdk-lib/aws-cloudfront';
 const updateDotenv = require('update-dotenv');
 
 export interface AWSLambdaAdapterProps {
@@ -18,11 +17,19 @@ export interface AWSLambdaAdapterProps {
 export interface AWSCachingStaticAssetsProps {
   cacheControl: string;
 }
+export interface AWSCachePolicyProps {
+  comment?: string;
+  defaultTtl?: number;
+  minTtl?: number;
+  maxTtl?: number;
+  enableAcceptEncodingGzip?: boolean;
+  enableAcceptEncodingBrotli?: boolean;
+}
 
 export interface AWSCachingProps {
   staticAssets?: AWSCachingStaticAssetsProps;
-  distributionDynamic?: CachePolicyProps;
-  distributionStatic?: CachePolicyProps;
+  distributionDynamic?: AWSCachePolicyProps;
+  distributionStatic?: AWSCachePolicyProps;
 }
 
 export interface AWSExistingResourcesProps {
