@@ -159,10 +159,6 @@ export class AWSAdapterStack extends Stack {
       );
     }
 
-    console.log(props.cacheConfig?.staticAssets?.cacheControl);
-    console.log(CacheControl.fromString(props.cacheConfig?.staticAssets?.cacheControl ?? ''));
-
-
     new BucketDeployment(this, `${id}-static-deployment`, {
       destinationBucket: this.bucket,
       sources: [Source.asset(staticPath!), Source.asset(prerenderedPath!)],
@@ -211,6 +207,8 @@ export class AWSAdapterStack extends Stack {
       cookieBehavior: CacheCookieBehavior.all(),
       queryStringBehavior: CacheQueryStringBehavior.all(),
       headerBehavior: CacheHeaderBehavior.allowList(...allowHeaders),
+      enableAcceptEncodingBrotli: dynamicCacheConfig?.enableAcceptEncodingBrotli ?? false,
+      enableAcceptEncodingGzip: dynamicCacheConfig?.enableAcceptEncodingGzip ?? true,
     });
 
     const staticCachePolicy = new CachePolicy(this, `${stackId}-static-policy`, {
@@ -221,6 +219,8 @@ export class AWSAdapterStack extends Stack {
       cookieBehavior: CacheCookieBehavior.none(),
       queryStringBehavior: CacheQueryStringBehavior.none(),
       headerBehavior: CacheHeaderBehavior.none(),
+      enableAcceptEncodingBrotli: dynamicCacheConfig?.enableAcceptEncodingBrotli ?? true,
+      enableAcceptEncodingGzip: dynamicCacheConfig?.enableAcceptEncodingGzip ?? true,
     });
 
     const distribution = new Distribution(this, `${stackId}-cache`, {
