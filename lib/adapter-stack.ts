@@ -13,15 +13,16 @@ import { CorsHttpMethod, HttpApi, IHttpApi, PayloadFormatVersion } from '@aws-cd
 import { HttpLambdaIntegration } from '@aws-cdk/aws-apigatewayv2-integrations-alpha';
 import { config } from 'dotenv';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
-import { AWSCachingProps, AWSCloudFrontProps, AWSLambdaAdapterProps } from '../adapter';
+import { AWSCachingProps, AWSExistingResourcesProps, AWSLambdaAdapterProps } from '../adapter';
 import { Architecture, AssetCode, Code, Function, IFunction, Runtime } from 'aws-cdk-lib/aws-lambda';
-import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
+import { BucketDeployment, CacheControl, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import { ARecord, HostedZone, IHostedZone, RecordTarget } from 'aws-cdk-lib/aws-route53';
 import { CloudFrontTarget } from 'aws-cdk-lib/aws-route53-targets';
 import {
   AllowedMethods,
   CachePolicy,
   Distribution,
+  IDistribution,
   OriginProtocolPolicy,
   OriginRequestCookieBehavior,
   OriginRequestHeaderBehavior,
@@ -45,7 +46,7 @@ export interface AWSAdapterStackProps extends StackProps {
   serverHandlerPolicies?: PolicyStatement[];
   zoneName?: string;
   lambdaConfig: AWSLambdaAdapterProps;
-  cloudfrontConfig: AWSCloudFrontProps;
+  existingResources: AWSExistingResourcesProps;
   cacheConfig: AWSCachingProps;
 }
 
@@ -55,6 +56,7 @@ export class AWSAdapterStack extends Stack {
   httpApi: IHttpApi;
   hostedZone: IHostedZone;
   certificate: ICertificate;
+  distribution: IDistribution;
 
   constructor(scope: Construct, id: string, props: AWSAdapterStackProps) {
     super(scope, id, props);
@@ -68,24 +70,8 @@ export class AWSAdapterStack extends Stack {
     const [_, zoneName, ...MLDs] = process.env.FQDN?.split('.') || [];
     const domainName = [zoneName, ...MLDs].join('.');
 
-    console.log('CDK props');
-    console.log(typeof props.lambdaConfig);
-    console.log(props.lambdaConfig);
-    console.log(props.lambdaConfig.runtime);
-    console.log(props.lambdaConfig.timeout);
-    console.log(props.lambdaConfig.architecture);
-    console.log(props.lambdaConfig.memorySize);
-    console.log(props.lambdaConfig.logRetentionDays);
-    console.log(typeof props.cloudfrontConfig);
-    console.log(props.cloudfrontConfig);
-    console.log(typeof props.cacheConfig);
-    console.log(props.cacheConfig);
-
-    console.log('CDK env');
-    console.log(process.env);
-
-    const architectureString = props.lambdaConfig.architecture ?? 'X86_64';
-    const runtimeString = props.lambdaConfig.runtime ?? 'NODEJS_16_X';
+    const architectureString = props.lambdaConfig.architecture ?? 'ARM_64';
+    const runtimeString = props.lambdaConfig.runtime ?? 'NODEJS_18_X';
     const runtime =
       runtimeString in runtimeMapping ? runtimeMapping[runtimeString as keyof typeof runtimeMapping] : Runtime.PROVIDED;
     const architecture =
@@ -93,7 +79,7 @@ export class AWSAdapterStack extends Stack {
         ? architectureMapping[architectureString as keyof typeof architectureMapping]
         : Architecture.custom(architectureString);
 
-    this.serverHandler = new Function(this, 'LambdaServerFunctionHandler', {
+    this.serverHandler = new Function(this, `${id}-server-function`, {
       code: new AssetCode(serverPath!),
       handler: 'index.handler',
       timeout: Duration.seconds(props.lambdaConfig.timeout ?? 900),
@@ -108,7 +94,7 @@ export class AWSAdapterStack extends Stack {
 
     props.serverHandlerPolicies?.forEach((policy) => this.serverHandler.addToRolePolicy(policy));
 
-    this.httpApi = new HttpApi(this, 'API', {
+    this.httpApi = new HttpApi(this, `${id}-server-api`, {
       corsPreflight: {
         allowHeaders: ['*'],
         allowMethods: [CorsHttpMethod.ANY],
@@ -120,30 +106,73 @@ export class AWSAdapterStack extends Stack {
       }),
     });
 
-    this.bucket = new Bucket(this, 'StaticContentBucket', {
-      removalPolicy: RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-    });
-
-    if (process.env.FQDN) {
-      this.hostedZone = HostedZone.fromLookup(this, 'HostedZone', {
-        domainName,
-      }) as HostedZone;
-
-      this.certificate = new aws_certificatemanager.DnsValidatedCertificate(this, 'DnsValidatedCertificate', {
-        domainName: process.env.FQDN!,
-        hostedZone: this.hostedZone,
-        region: 'us-east-1',
+    if (props.existingResources.staticBucketName) {
+      this.bucket = Bucket.fromBucketName(this, `${id}-static-content`, props.existingResources.staticBucketName);
+    } else {
+      this.bucket = new Bucket(this, 'StaticContentBucket', {
+        removalPolicy: RemovalPolicy.DESTROY,
+        autoDeleteObjects: true,
       });
     }
 
-    const distribution = new Distribution(this, 'CloudFrontDistribution', {
+    if (!props.existingResources.distributionId || !props.existingResources.distributionDomainName) {
+      if (process.env.FQDN) {
+        this.hostedZone = HostedZone.fromLookup(this, 'HostedZone', {
+          domainName,
+        }) as HostedZone;
+
+        this.certificate = new aws_certificatemanager.DnsValidatedCertificate(this, 'DnsValidatedCertificate', {
+          domainName: process.env.FQDN!,
+          hostedZone: this.hostedZone,
+          region: 'us-east-1',
+        });
+      }
+      this.distribution = this.createDistribution(id, routes, process.env.FQDN);
+    } else {
+      const lambdaEnvironmentVars = {
+        DISTRIBUTION_ID: props.existingResources.distributionId,
+        DISTRIBUTION_DOMAIN_NAME: props.existingResources.distributionDomainName,
+        DISTRIBUTION_STATIC_CACHE_SETTINGS: JSON.stringify(props.cacheConfig.distributionStatic),
+        DISTRIBUTION_DYNAMIC_CACHE_SETTINGS: JSON.stringify(props.cacheConfig.distributionDynamic),
+        DISTRIBUTION_STATIC_ROUTES: JSON.stringify(routes),
+        DISTRIBUTION_STATIC_ORIGINS: JSON.stringify([this.bucket.bucketName]),
+        DISTRIBUTION_DYNAMIC_ORIGINS: JSON.stringify([this.httpApi.apiEndpoint]),
+      };
+      this.distribution = this.updateDistribution(
+        id,
+        props.existingResources.distributionId,
+        props.existingResources.distributionDomainName,
+        lambdaEnvironmentVars
+      );
+    }
+
+    new BucketDeployment(this, `${id}-static-deployment`, {
+      destinationBucket: this.bucket,
+      sources: [Source.asset(staticPath!), Source.asset(prerenderedPath!)],
+      retainOnDelete: false,
+      prune: true,
+      distribution: this.distribution, //TODO check what invalidates
+      distributionPaths: ['/*'],
+      cacheControl: props.cacheConfig.staticAssets
+        ? [CacheControl.fromString(props.cacheConfig.staticAssets.cacheControl)]
+        : undefined,
+    });
+
+    new CfnOutput(this, `${id}-url`, {
+      value: process.env.FQDN ? `https://${process.env.FQDN}` : `https://${this.distribution.distributionDomainName}`,
+    });
+
+    new CfnOutput(this, 'STACK_NAME', { value: id });
+  }
+
+  private createDistribution(stackId: string, routes: string[], FQDN?: string): Distribution {
+    const distribution = new Distribution(this, `${stackId}-cache`, {
       priceClass: PriceClass.PRICE_CLASS_100,
       enabled: true,
       defaultRootObject: '',
       sslSupportMethod: SSLMethod.SNI,
-      domainNames: process.env.FQDN ? [process.env.FQDN!] : [],
-      certificate: process.env.FQDN
+      domainNames: FQDN ? [FQDN!] : [],
+      certificate: FQDN
         ? aws_certificatemanager.Certificate.fromCertificateArn(
             this,
             'DomainCertificate',
@@ -185,40 +214,25 @@ export class AWSAdapterStack extends Stack {
       });
     });
 
-    if (process.env.FQDN) {
-      new ARecord(this, 'ARecord', {
-        recordName: process.env.FQDN,
+    if (FQDN) {
+      new ARecord(this, `${stackId}-alias-record`, {
+        recordName: FQDN,
         target: RecordTarget.fromAlias(new CloudFrontTarget(distribution)),
         zone: this.hostedZone,
       });
     }
 
-    new BucketDeployment(this, 'StaticContentDeployment', {
-      destinationBucket: this.bucket,
-      sources: [Source.asset(staticPath!), Source.asset(prerenderedPath!)],
-      retainOnDelete: false,
-      prune: true,
-      distribution,
-      distributionPaths: ['/*'],
-    });
-
-    this.createCustomResource('add-static-origin', './custom-resources/add-origins');
-
-    new CfnOutput(this, 'appUrl', {
-      value: process.env.FQDN ? `https://${process.env.FQDN}` : `https://${distribution.domainName}`,
-    });
-
-    new CfnOutput(this, 'stackName', { value: id });
+    return distribution;
   }
 
-  private createCustomResource(name: string, filePath: string): CustomResource {
+  private createCustomResource(name: string, filePath: string, env?: { [key: string]: string }): CustomResource {
     const customLambda = new Function(this, name, {
       functionName: `${name}`,
       runtime: Runtime.NODEJS_18_X,
       timeout: Duration.seconds(30),
       code: Code.fromAsset(path.join(__dirname, filePath)),
       handler: 'index.handler',
-      environment: {},
+      environment: env ?? {},
     });
 
     const customResourceProvider = new Provider(this, `${name}-provider`, {
@@ -227,6 +241,20 @@ export class AWSAdapterStack extends Stack {
 
     return new CustomResource(this, `${name}-custom-resource`, {
       serviceToken: customResourceProvider.serviceToken,
+    });
+  }
+
+  private updateDistribution(
+    stackId: string,
+    distributionId: string,
+    domainName: string,
+    env?: { [key: string]: string }
+  ): IDistribution {
+    this.createCustomResource(`${stackId}-update-distribution`, './custom-resources/update-distribution', env ?? {});
+
+    return Distribution.fromDistributionAttributes(this, `${stackId}-cache`, {
+      distributionId,
+      domainName,
     });
   }
 }

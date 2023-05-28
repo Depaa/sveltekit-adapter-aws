@@ -4,9 +4,7 @@ import { spawnSync } from 'child_process';
 import * as esbuild from 'esbuild';
 import { config } from 'dotenv';
 import { writeFileSync } from 'fs';
-import { Duration } from 'aws-cdk-lib';
-import { Architecture, Runtime } from 'aws-cdk-lib/aws-lambda';
-import { CachePolicyProps, CacheQueryStringBehavior } from 'aws-cdk-lib/aws-cloudfront';
+import { CachePolicyProps } from 'aws-cdk-lib/aws-cloudfront';
 const updateDotenv = require('update-dotenv');
 
 export interface AWSLambdaAdapterProps {
@@ -17,14 +15,20 @@ export interface AWSLambdaAdapterProps {
   architecture?: 'ARM_64' | 'X86_64' | string;
 }
 
+export interface AWSCachingStaticAssetsProps {
+  cacheControl: string;
+}
+
 export interface AWSCachingProps {
-  staticAssets?: CachePolicyProps;
+  staticAssets?: AWSCachingStaticAssetsProps;
   distributionDynamic?: CachePolicyProps;
   distributionStatic?: CachePolicyProps;
 }
 
-export interface AWSCloudFrontProps {
+export interface AWSExistingResourcesProps {
   distributionId?: string;
+  distributionDomainName?: string;
+  staticBucketName?: string;
 }
 
 export interface AWSAdapterProps {
@@ -39,7 +43,7 @@ export interface AWSAdapterProps {
   zoneName?: string;
   env?: { [key: string]: string };
   lambdaConfig?: AWSLambdaAdapterProps;
-  cloudfrontConfig?: AWSCloudFrontProps;
+  existingResources?: AWSExistingResourcesProps;
   cacheConfig?: AWSCachingProps;
 }
 
@@ -56,7 +60,7 @@ export function adapter({
   env = {},
   lambdaConfig = {},
   cacheConfig = {},
-  cloudfrontConfig = {},
+  existingResources = {},
 }: AWSAdapterProps = {}) {
   /** @type {import('@sveltejs/kit').Adapter} */
   return {
@@ -130,7 +134,7 @@ export function adapter({
       builder.log.minor('Deploy using AWS-CDK.');
       builder.log.minor(JSON.stringify(lambdaConfig));
       builder.log.minor(JSON.stringify(cacheConfig));
-      builder.log.minor(JSON.stringify(cloudfrontConfig));
+      builder.log.minor(JSON.stringify(existingResources));
       autoDeploy &&
         spawnSync(
           'npx',
@@ -162,7 +166,7 @@ export function adapter({
                 ZONE_NAME: zoneName,
                 LAMBDA_CONFIG: JSON.stringify(lambdaConfig),
                 CACHE_CONFIG: JSON.stringify(cacheConfig),
-                CLOUDFRONT_CONFIG: JSON.stringify(cloudfrontConfig),
+                CLOUDFRONT_CONFIG: JSON.stringify(existingResources),
               },
               process.env,
               env
