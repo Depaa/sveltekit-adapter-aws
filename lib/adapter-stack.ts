@@ -197,13 +197,13 @@ export class AWSAdapterStack extends Stack {
       'Authorization',
     ];
 
-    const defaultTtl = 365;
+    const defaultTtl = 31_536_000; //365 days
 
     const dynamicCachePolicy = new CachePolicy(this, `${stackId}-dynamic-policy`, {
       comment: dynamicCacheConfig?.comment,
-      defaultTtl: Duration.days(dynamicCacheConfig?.minTtl ?? defaultTtl),
-      minTtl: Duration.days(dynamicCacheConfig?.minTtl ?? defaultTtl),
-      maxTtl: Duration.days(dynamicCacheConfig?.maxTtl ?? defaultTtl),
+      defaultTtl: Duration.seconds(dynamicCacheConfig?.minTtl ?? defaultTtl),
+      minTtl: Duration.seconds(dynamicCacheConfig?.minTtl ?? defaultTtl),
+      maxTtl: Duration.seconds(dynamicCacheConfig?.maxTtl ?? defaultTtl),
       cookieBehavior: CacheCookieBehavior.all(),
       queryStringBehavior: CacheQueryStringBehavior.all(),
       headerBehavior: CacheHeaderBehavior.allowList(...allowHeaders),
@@ -211,9 +211,9 @@ export class AWSAdapterStack extends Stack {
 
     const staticCachePolicy = new CachePolicy(this, `${stackId}-static-policy`, {
       comment: staticCacheConfig?.comment,
-      defaultTtl: Duration.days(staticCacheConfig?.minTtl ?? defaultTtl),
-      minTtl: Duration.days(staticCacheConfig?.minTtl ?? defaultTtl),
-      maxTtl: Duration.days(staticCacheConfig?.maxTtl ?? defaultTtl),
+      defaultTtl: Duration.seconds(staticCacheConfig?.minTtl ?? defaultTtl),
+      minTtl: Duration.seconds(staticCacheConfig?.minTtl ?? defaultTtl),
+      maxTtl: Duration.seconds(staticCacheConfig?.maxTtl ?? defaultTtl),
       cookieBehavior: CacheCookieBehavior.none(),
       queryStringBehavior: CacheQueryStringBehavior.none(),
       headerBehavior: CacheHeaderBehavior.none(),
