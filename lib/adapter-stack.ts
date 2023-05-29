@@ -12,7 +12,7 @@ import {
 import { CorsHttpMethod, HttpApi, IHttpApi, PayloadFormatVersion } from '@aws-cdk/aws-apigatewayv2-alpha';
 import { HttpLambdaIntegration } from '@aws-cdk/aws-apigatewayv2-integrations-alpha';
 import { config } from 'dotenv';
-import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { Effect, PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { AWSCachePolicyProps, AWSCachingProps, AWSExistingResourcesProps, AWSLambdaAdapterProps } from '../adapter';
 import { Architecture, AssetCode, Code, Function, IFunction, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { BucketDeployment, CacheControl, Source } from 'aws-cdk-lib/aws-s3-deployment';
@@ -280,6 +280,31 @@ export class AWSAdapterStack extends Stack {
       handler: 'index.handler',
       environment: env ?? {},
     });
+
+    const customPermissions = new PolicyStatement({
+      effect: Effect.ALLOW,
+      actions: [
+        // 'cloudfront:CreateCloudFrontOriginAccessIdentity',
+        // 'cloudfront:CreateOriginRequestPolicy',
+        // 'cloudfront:CreateResponseHeadersPolicy',
+        // 'cloudfront:DeleteCachePolicy',
+        // 'cloudfront:DeleteCloudFrontOriginAccessIdentity	',
+        // 'cloudfront:DeleteOriginRequestPolicy',
+        // 'cloudfront:DeleteResponseHeadersPolicy',
+        'cloudfront:GetDistribution',
+        'cloudfront:GetDistributionConfig',
+        'cloudfront:UpdateDistribution',
+      ],
+      resources: [
+        // `arn:aws:cloudfront::${Account}:response-headers-policy/*`,
+        // `arn:aws:cloudfront::${Account}:cache-policy/*`,
+        // `arn:aws:cloudfront::${Account}:origin-request-policy/*`,
+        // `arn:aws:cloudfront::${Account}:origin-access-identity/*`,
+        // `arn:aws:cloudfront::${Account}:origin-access-identity/*`,
+        `arn:aws:cloudfront::${this.account}:distribution/*`
+      ]
+    });
+    customLambda.addToRolePolicy(customPermissions);
 
     const customResourceProvider = new Provider(this, `${name}-provider`, {
       onEventHandler: customLambda,

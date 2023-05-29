@@ -1,0 +1,12 @@
+  {
+    "RequestType": "Create",
+    "ServiceToken": "arn:aws:lambda:eu-central-1: 013990830057:function:dev-blog-ssr-adapter-devblogssradapterupdatedistri-zs8ICd1ZVRpa",
+    "ResponseURL": "https: //cloudformation-custom-resource-response-eucentral1.s3.eu-central-1.amazonaws.com/arn%3Aaws%3Acloudformation%3Aeu-central-1%3A013990830057%3Astack/dev-blog-ssr-adapter/71518660-fdf0-11ed-b8c3-0ab7eae1fdae%7Cdevblogssradapterupdatedistributioncustomresource%7C3b584c51-2f02-43ff-b52e-1562d3923fff?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20230529T073027Z&X-Amz-SignedHeaders=host&X-Amz-Expires=7200&X-Amz-Credential=AKIAYYGVRKE7FGYWT2MJ%2F20230529%2Feu-central-1%2Fs3%2Faws4_request&X-Amz-Signature=f42f34e451130791086be687745ecf23470df8b19bce1177395121f47f5c5fc1",
+    "StackId": "arn:aws:cloudformation:eu-central-1: 013990830057:stack/dev-blog-ssr-adapter/71518660-fdf0-11ed-b8c3-0ab7eae1fdae",
+    "RequestId": "3b584c51-2f02-43ff-b52e-1562d3923fff",
+    "LogicalResourceId": "devblogssradapterupdatedistributioncustomresource",
+    "ResourceType": "AWS: :CloudFormation: :CustomResource",
+    "ResourceProperties": {
+      "ServiceToken": "arn:aws:lambda:eu-central-1: 013990830057:function:dev-blog-ssr-adapter-devblogssradapterupdatedistri-zs8ICd1ZVRpa"
+    }
+  }
