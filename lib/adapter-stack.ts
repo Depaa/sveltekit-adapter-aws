@@ -184,10 +184,12 @@ export class AWSAdapterStack extends Stack {
       const lambdaEnvironmentVars = {
         DISTRIBUTION_ID: props.existingResources.distributionId,
         DISTRIBUTION_STATIC_ROUTES: JSON.stringify(routes),
-        DISTRIBUTION_STATIC_ORIGINS: JSON.stringify([this.bucket.bucketName]),
-        DISTRIBUTION_DYNAMIC_ORIGINS: JSON.stringify([this.httpApi.apiEndpoint]),
+        DISTRIBUTION_STATIC_ORIGINS: JSON.stringify([
+          { bucketName: this.bucket.bucketName, domainName: this.bucket.bucketDomainName },
+        ]),
+        DISTRIBUTION_DYNAMIC_ORIGINS: JSON.stringify([{ url: this.httpApi.apiEndpoint, path: '' }]),
         DISTRIBUTION_STATIC_CACHE_POLICY_ID: staticCachePolicy.cachePolicyId,
-        DISTRIBUTION_DYNAMIC_CACHE_POLICY_ID: dynamicCachePolicy.cachePolicyId
+        DISTRIBUTION_DYNAMIC_CACHE_POLICY_ID: dynamicCachePolicy.cachePolicyId,
       };
       this.distribution = this.updateDistribution(
         id,
@@ -202,7 +204,7 @@ export class AWSAdapterStack extends Stack {
       sources: [Source.asset(staticPath!), Source.asset(prerenderedPath!)],
       retainOnDelete: false,
       prune: true,
-      distribution: this.distribution, //TODO check what invalidates
+      distribution: this.distribution,
       distributionPaths: ['/*'],
       cacheControl: props.cacheConfig.staticAssets
         ? [CacheControl.fromString(props.cacheConfig.staticAssets.cacheControl)]
@@ -223,7 +225,6 @@ export class AWSAdapterStack extends Stack {
     staticCachePolicy: CachePolicy,
     FQDN?: string
   ): Distribution {
-
     const distribution = new Distribution(this, `${stackId}-cache`, {
       priceClass: PriceClass.PRICE_CLASS_ALL,
       httpVersion: HttpVersion.HTTP2_AND_3,
@@ -250,7 +251,7 @@ export class AWSAdapterStack extends Stack {
       },
     });
 
-    const s3Origin = new S3Origin(this.bucket, {});
+    const s3Origin = new S3Origin(this.bucket);
     routes.forEach((route) => {
       distribution.addBehavior(route, s3Origin, {
         viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -284,7 +285,7 @@ export class AWSAdapterStack extends Stack {
     const customPermissions = new PolicyStatement({
       effect: Effect.ALLOW,
       actions: [
-        // 'cloudfront:CreateCloudFrontOriginAccessIdentity',
+        'cloudfront:CreateCloudFrontOriginAccessIdentity',
         // 'cloudfront:CreateOriginRequestPolicy',
         // 'cloudfront:CreateResponseHeadersPolicy',
         // 'cloudfront:DeleteCachePolicy',
@@ -300,9 +301,9 @@ export class AWSAdapterStack extends Stack {
         // `arn:aws:cloudfront::${Account}:cache-policy/*`,
         // `arn:aws:cloudfront::${Account}:origin-request-policy/*`,
         // `arn:aws:cloudfront::${Account}:origin-access-identity/*`,
-        // `arn:aws:cloudfront::${Account}:origin-access-identity/*`,
-        `arn:aws:cloudfront::${this.account}:distribution/*`
-      ]
+        `arn:aws:cloudfront::${this.account}:origin-access-identity/*`,
+        `arn:aws:cloudfront::${this.account}:distribution/*`,
+      ],
     });
     customLambda.addToRolePolicy(customPermissions);
 
