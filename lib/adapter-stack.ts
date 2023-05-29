@@ -116,11 +116,50 @@ export class AWSAdapterStack extends Stack {
     if (props.existingResources.staticBucketName) {
       this.bucket = Bucket.fromBucketName(this, `${id}-static-content`, props.existingResources.staticBucketName);
     } else {
-      this.bucket = new Bucket(this, 'StaticContentBucket', {
+      this.bucket = new Bucket(this, `${id}-static-content`, {
         removalPolicy: RemovalPolicy.DESTROY,
         autoDeleteObjects: true,
       });
     }
+
+    const allowHeaders = [
+      'Origin',
+      'Accept-Charset',
+      'Accept',
+      'Access-Control-Request-Method',
+      'Access-Control-Request-Headers',
+      'Referer',
+      'Accept-Language',
+      'Accept-Datetime',
+      'Authorization',
+    ];
+    const defaultTtl = 31_536_000; //365 days
+    const dynamicCacheConfig = props.cacheConfig.distributionDynamic;
+    const staticCacheConfig = props.cacheConfig.distributionStatic;
+
+    const dynamicCachePolicy = new CachePolicy(this, `${id}-dynamic-policy`, {
+      comment: dynamicCacheConfig?.comment,
+      defaultTtl: Duration.seconds(dynamicCacheConfig?.minTtl ?? defaultTtl),
+      minTtl: Duration.seconds(dynamicCacheConfig?.minTtl ?? defaultTtl),
+      maxTtl: Duration.seconds(dynamicCacheConfig?.maxTtl ?? defaultTtl),
+      cookieBehavior: CacheCookieBehavior.all(),
+      queryStringBehavior: CacheQueryStringBehavior.all(),
+      headerBehavior: CacheHeaderBehavior.allowList(...allowHeaders),
+      enableAcceptEncodingBrotli: dynamicCacheConfig?.enableAcceptEncodingBrotli ?? false,
+      enableAcceptEncodingGzip: dynamicCacheConfig?.enableAcceptEncodingGzip ?? true,
+    });
+
+    const staticCachePolicy = new CachePolicy(this, `${id}-static-policy`, {
+      comment: staticCacheConfig?.comment,
+      defaultTtl: Duration.seconds(staticCacheConfig?.minTtl ?? defaultTtl),
+      minTtl: Duration.seconds(staticCacheConfig?.minTtl ?? defaultTtl),
+      maxTtl: Duration.seconds(staticCacheConfig?.maxTtl ?? defaultTtl),
+      cookieBehavior: CacheCookieBehavior.none(),
+      queryStringBehavior: CacheQueryStringBehavior.none(),
+      headerBehavior: CacheHeaderBehavior.none(),
+      enableAcceptEncodingBrotli: dynamicCacheConfig?.enableAcceptEncodingBrotli ?? true,
+      enableAcceptEncodingGzip: dynamicCacheConfig?.enableAcceptEncodingGzip ?? true,
+    });
 
     if (!props.existingResources.distributionId || !props.existingResources.distributionDomainName) {
       if (process.env.FQDN) {
@@ -137,19 +176,18 @@ export class AWSAdapterStack extends Stack {
       this.distribution = this.createDistribution(
         id,
         routes,
-        process.env.FQDN,
-        props.cacheConfig.distributionDynamic,
-        props.cacheConfig.distributionStatic
+        dynamicCachePolicy,
+        staticCachePolicy,
+        process.env.FQDN
       );
     } else {
       const lambdaEnvironmentVars = {
         DISTRIBUTION_ID: props.existingResources.distributionId,
-        DISTRIBUTION_DOMAIN_NAME: props.existingResources.distributionDomainName,
-        DISTRIBUTION_STATIC_CACHE_SETTINGS: JSON.stringify(props.cacheConfig.distributionStatic),
-        DISTRIBUTION_DYNAMIC_CACHE_SETTINGS: JSON.stringify(props.cacheConfig.distributionDynamic),
         DISTRIBUTION_STATIC_ROUTES: JSON.stringify(routes),
         DISTRIBUTION_STATIC_ORIGINS: JSON.stringify([this.bucket.bucketName]),
         DISTRIBUTION_DYNAMIC_ORIGINS: JSON.stringify([this.httpApi.apiEndpoint]),
+        DISTRIBUTION_STATIC_CACHE_POLICY_ID: staticCachePolicy.cachePolicyId,
+        DISTRIBUTION_DYNAMIC_CACHE_POLICY_ID: dynamicCachePolicy.cachePolicyId
       };
       this.distribution = this.updateDistribution(
         id,
@@ -181,47 +219,10 @@ export class AWSAdapterStack extends Stack {
   private createDistribution(
     stackId: string,
     routes: string[],
-    FQDN?: string,
-    dynamicCacheConfig?: AWSCachePolicyProps,
-    staticCacheConfig?: AWSCachePolicyProps
+    dynamicCachePolicy: CachePolicy,
+    staticCachePolicy: CachePolicy,
+    FQDN?: string
   ): Distribution {
-    const allowHeaders = [
-      'Origin',
-      'Accept-Charset',
-      'Accept',
-      'Access-Control-Request-Method',
-      'Access-Control-Request-Headers',
-      'Referer',
-      'Accept-Language',
-      'Accept-Datetime',
-      'Authorization',
-    ];
-
-    const defaultTtl = 31_536_000; //365 days
-
-    const dynamicCachePolicy = new CachePolicy(this, `${stackId}-dynamic-policy`, {
-      comment: dynamicCacheConfig?.comment,
-      defaultTtl: Duration.seconds(dynamicCacheConfig?.minTtl ?? defaultTtl),
-      minTtl: Duration.seconds(dynamicCacheConfig?.minTtl ?? defaultTtl),
-      maxTtl: Duration.seconds(dynamicCacheConfig?.maxTtl ?? defaultTtl),
-      cookieBehavior: CacheCookieBehavior.all(),
-      queryStringBehavior: CacheQueryStringBehavior.all(),
-      headerBehavior: CacheHeaderBehavior.allowList(...allowHeaders),
-      enableAcceptEncodingBrotli: dynamicCacheConfig?.enableAcceptEncodingBrotli ?? false,
-      enableAcceptEncodingGzip: dynamicCacheConfig?.enableAcceptEncodingGzip ?? true,
-    });
-
-    const staticCachePolicy = new CachePolicy(this, `${stackId}-static-policy`, {
-      comment: staticCacheConfig?.comment,
-      defaultTtl: Duration.seconds(staticCacheConfig?.minTtl ?? defaultTtl),
-      minTtl: Duration.seconds(staticCacheConfig?.minTtl ?? defaultTtl),
-      maxTtl: Duration.seconds(staticCacheConfig?.maxTtl ?? defaultTtl),
-      cookieBehavior: CacheCookieBehavior.none(),
-      queryStringBehavior: CacheQueryStringBehavior.none(),
-      headerBehavior: CacheHeaderBehavior.none(),
-      enableAcceptEncodingBrotli: dynamicCacheConfig?.enableAcceptEncodingBrotli ?? true,
-      enableAcceptEncodingGzip: dynamicCacheConfig?.enableAcceptEncodingGzip ?? true,
-    });
 
     const distribution = new Distribution(this, `${stackId}-cache`, {
       priceClass: PriceClass.PRICE_CLASS_ALL,
