@@ -12,7 +12,7 @@ import {
 import { CorsHttpMethod, HttpApi, IHttpApi, PayloadFormatVersion } from '@aws-cdk/aws-apigatewayv2-alpha';
 import { HttpLambdaIntegration } from '@aws-cdk/aws-apigatewayv2-integrations-alpha';
 import { config } from 'dotenv';
-import { Effect, PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { Effect, PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { AWSCachePolicyProps, AWSCachingProps, AWSExistingResourcesProps, AWSLambdaAdapterProps } from '../adapter';
 import { Architecture, AssetCode, Code, Function, IFunction, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { BucketDeployment, CacheControl, Source } from 'aws-cdk-lib/aws-s3-deployment';
@@ -173,13 +173,7 @@ export class AWSAdapterStack extends Stack {
           region: 'us-east-1',
         });
       }
-      this.distribution = this.createDistribution(
-        id,
-        routes,
-        dynamicCachePolicy,
-        staticCachePolicy,
-        process.env.FQDN
-      );
+      this.distribution = this.createDistribution(id, routes, dynamicCachePolicy, staticCachePolicy, process.env.FQDN);
     } else {
       const lambdaEnvironmentVars = {
         DISTRIBUTION_ID: props.existingResources.distributionId,
@@ -198,6 +192,20 @@ export class AWSAdapterStack extends Stack {
         lambdaEnvironmentVars
       );
     }
+
+    const s3Policy = new PolicyStatement({
+      actions: ['s3:GetObject'],
+      resources: [`${this.bucket.bucketArn}/*`],
+      effect: Effect.ALLOW,
+      principals: [new ServicePrincipal('cloudfront.amazonaws.com')],
+      conditions: {
+        'StringEquals': {
+          'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${this.distribution.distributionId}`
+        }
+      }
+    });
+
+    this.bucket.addToResourcePolicy(s3Policy);
 
     new BucketDeployment(this, `${id}-static-deployment`, {
       destinationBucket: this.bucket,
@@ -285,13 +293,15 @@ export class AWSAdapterStack extends Stack {
     const customPermissions = new PolicyStatement({
       effect: Effect.ALLOW,
       actions: [
-        'cloudfront:CreateCloudFrontOriginAccessIdentity',
+        // 'cloudfront:CreateCloudFrontOriginAccessIdentity',
         // 'cloudfront:CreateOriginRequestPolicy',
         // 'cloudfront:CreateResponseHeadersPolicy',
         // 'cloudfront:DeleteCachePolicy',
         // 'cloudfront:DeleteCloudFrontOriginAccessIdentity	',
         // 'cloudfront:DeleteOriginRequestPolicy',
         // 'cloudfront:DeleteResponseHeadersPolicy',
+        'cloudfront:DeleteOriginAccessControl',
+        'cloudfront:CreateOriginAccessControl',
         'cloudfront:GetDistribution',
         'cloudfront:GetDistributionConfig',
         'cloudfront:UpdateDistribution',
@@ -300,8 +310,8 @@ export class AWSAdapterStack extends Stack {
         // `arn:aws:cloudfront::${Account}:response-headers-policy/*`,
         // `arn:aws:cloudfront::${Account}:cache-policy/*`,
         // `arn:aws:cloudfront::${Account}:origin-request-policy/*`,
-        // `arn:aws:cloudfront::${Account}:origin-access-identity/*`,
-        `arn:aws:cloudfront::${this.account}:origin-access-identity/*`,
+        `arn:aws:cloudfront::${this.account}:origin-access-control/*`,
+        // `arn:aws:cloudfront::${this.account}:origin-access-identity/*`,
         `arn:aws:cloudfront::${this.account}:distribution/*`,
       ],
     });
