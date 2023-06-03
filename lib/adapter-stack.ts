@@ -12,8 +12,8 @@ import {
 import { CorsHttpMethod, HttpApi, IHttpApi, PayloadFormatVersion } from '@aws-cdk/aws-apigatewayv2-alpha';
 import { HttpLambdaIntegration } from '@aws-cdk/aws-apigatewayv2-integrations-alpha';
 import { config } from 'dotenv';
-import { Effect, PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
-import { AWSCachePolicyProps, AWSCachingProps, AWSExistingResourcesProps, AWSLambdaAdapterProps } from '../adapter';
+import { Effect, PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { AWSCachingProps, AWSExistingResourcesProps, AWSLambdaAdapterProps } from '../adapter';
 import { Architecture, AssetCode, Code, Function, IFunction, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { BucketDeployment, CacheControl, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import { ARecord, HostedZone, IHostedZone, RecordTarget } from 'aws-cdk-lib/aws-route53';
@@ -23,17 +23,12 @@ import {
   CacheCookieBehavior,
   CacheHeaderBehavior,
   CachePolicy,
-  CachePolicyProps,
   CacheQueryStringBehavior,
   Distribution,
   HttpVersion,
-  ICachePolicy,
   IDistribution,
   OriginProtocolPolicy,
-  OriginRequestCookieBehavior,
-  OriginRequestHeaderBehavior,
   OriginRequestPolicy,
-  OriginRequestQueryStringBehavior,
   PriceClass,
   SSLMethod,
   SecurityPolicyProtocol,
@@ -281,15 +276,7 @@ export class AWSAdapterStack extends Stack {
     const customPermissions = new PolicyStatement({
       effect: Effect.ALLOW,
       actions: [
-        // 'cloudfront:CreateCloudFrontOriginAccessIdentity',
-        // 'cloudfront:CreateOriginRequestPolicy',
-        // 'cloudfront:CreateResponseHeadersPolicy',
-        // 'cloudfront:DeleteCachePolicy',
-        // 'cloudfront:DeleteCloudFrontOriginAccessIdentity	',
-        // 'cloudfront:DeleteOriginRequestPolicy',
-        // 'cloudfront:DeleteResponseHeadersPolicy',
         'cloudfront:DeleteOriginAccessControl',
-        'cloudfront:CreateOriginAccessControl',
         'cloudfront:GetDistribution',
         'cloudfront:GetDistributionConfig',
         'cloudfront:UpdateDistribution',
@@ -297,11 +284,7 @@ export class AWSAdapterStack extends Stack {
         's3:PutBucketPolicy'
       ],
       resources: [
-        // `arn:aws:cloudfront::${Account}:response-headers-policy/*`,
-        // `arn:aws:cloudfront::${Account}:cache-policy/*`,
-        // `arn:aws:cloudfront::${Account}:origin-request-policy/*`,
         `arn:aws:cloudfront::${this.account}:origin-access-control/*`,
-        // `arn:aws:cloudfront::${this.account}:origin-access-identity/*`,
         `arn:aws:cloudfront::${this.account}:distribution/*`,
         bucketArn
       ],
