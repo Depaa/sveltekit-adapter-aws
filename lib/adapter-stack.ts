@@ -177,7 +177,7 @@ export class AWSAdapterStack extends Stack {
     } else {
       const lambdaEnvironmentVars = {
         DISTRIBUTION_ID: props.existingResources.distributionId,
-        DISTRIBUTION_ARN: `arn:aws:cloudfront::${this.account}:distribution/${this.distribution.distributionId}`,
+        DISTRIBUTION_ARN: `arn:aws:cloudfront::${this.account}:distribution/${props.existingResources.distributionId}`,
         DISTRIBUTION_STATIC_ROUTES: JSON.stringify(routes),
         DISTRIBUTION_STATIC_ORIGINS: JSON.stringify([
           { bucketName: this.bucket.bucketName, domainName: this.bucket.bucketDomainName },

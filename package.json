@@ -17,7 +17,7 @@
     "cdk"
   ],
   "author": "Matteo Depascale",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "main": "./index.js",
   "types": "./index.d.ts",
   "bin": {
