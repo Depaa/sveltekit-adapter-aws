@@ -177,6 +177,7 @@ export class AWSAdapterStack extends Stack {
     } else {
       const lambdaEnvironmentVars = {
         DISTRIBUTION_ID: props.existingResources.distributionId,
+        DISTRIBUTION_ARN: `arn:aws:cloudfront::${this.account}:distribution/${this.distribution.distributionId}`,
         DISTRIBUTION_STATIC_ROUTES: JSON.stringify(routes),
         DISTRIBUTION_STATIC_ORIGINS: JSON.stringify([
           { bucketName: this.bucket.bucketName, domainName: this.bucket.bucketDomainName },
@@ -189,23 +190,10 @@ export class AWSAdapterStack extends Stack {
         id,
         props.existingResources.distributionId,
         props.existingResources.distributionDomainName,
+        this.bucket.bucketArn,
         lambdaEnvironmentVars
       );
     }
-
-    const s3Policy = new PolicyStatement({
-      actions: ['s3:GetObject'],
-      resources: [`${this.bucket.bucketArn}/*`],
-      effect: Effect.ALLOW,
-      principals: [new ServicePrincipal('cloudfront.amazonaws.com')],
-      conditions: {
-        'StringEquals': {
-          'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${this.distribution.distributionId}`
-        }
-      }
-    });
-
-    this.bucket.addToResourcePolicy(s3Policy);
 
     new BucketDeployment(this, `${id}-static-deployment`, {
       destinationBucket: this.bucket,
@@ -280,7 +268,7 @@ export class AWSAdapterStack extends Stack {
     return distribution;
   }
 
-  private createCustomResource(name: string, filePath: string, env?: { [key: string]: string }): CustomResource {
+  private createCustomResource(name: string, filePath: string, bucketArn: string, env?: { [key: string]: string }): CustomResource {
     const customLambda = new Function(this, name, {
       functionName: `${name}`,
       runtime: Runtime.NODEJS_18_X,
@@ -305,6 +293,8 @@ export class AWSAdapterStack extends Stack {
         'cloudfront:GetDistribution',
         'cloudfront:GetDistributionConfig',
         'cloudfront:UpdateDistribution',
+        's3:GetBucketPolicy',
+        's3:PutBucketPolicy'
       ],
       resources: [
         // `arn:aws:cloudfront::${Account}:response-headers-policy/*`,
@@ -313,6 +303,7 @@ export class AWSAdapterStack extends Stack {
         `arn:aws:cloudfront::${this.account}:origin-access-control/*`,
         // `arn:aws:cloudfront::${this.account}:origin-access-identity/*`,
         `arn:aws:cloudfront::${this.account}:distribution/*`,
+        bucketArn
       ],
     });
     customLambda.addToRolePolicy(customPermissions);
@@ -330,9 +321,10 @@ export class AWSAdapterStack extends Stack {
     stackId: string,
     distributionId: string,
     domainName: string,
+    bucketArn: string,
     env?: { [key: string]: string }
   ): IDistribution {
-    this.createCustomResource(`${stackId}-update-distribution`, './custom-resources/update-distribution', env ?? {});
+    this.createCustomResource(`${stackId}-update-distribution`, './custom-resources/update-distribution', bucketArn, env ?? {});
 
     return Distribution.fromDistributionAttributes(this, `${stackId}-cache`, {
       distributionId,
