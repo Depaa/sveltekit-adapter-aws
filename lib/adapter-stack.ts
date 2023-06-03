@@ -277,6 +277,7 @@ export class AWSAdapterStack extends Stack {
       effect: Effect.ALLOW,
       actions: [
         'cloudfront:DeleteOriginAccessControl',
+        'cloudfront:CreateOriginAccessControl',
         'cloudfront:GetDistribution',
         'cloudfront:GetDistributionConfig',
         'cloudfront:UpdateDistribution',
