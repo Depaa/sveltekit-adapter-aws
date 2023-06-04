@@ -207,6 +207,31 @@ export class AWSAdapterStack extends Stack {
     });
 
     new CfnOutput(this, 'STACK_NAME', { value: id });
+
+    new CfnOutput(this, `ExportsOutputSSRStaticOrigins`, {
+      value: JSON.stringify([{ bucketName: this.bucket.bucketName, domainName: this.bucket.bucketDomainName }]),
+      exportName: `${id}-static-origins`,
+    });
+
+    new CfnOutput(this, `ExportsOutputSSRStaticRoutes`, {
+      value: JSON.stringify(routes),
+      exportName: `${id}-static-routes`,
+    });
+
+    new CfnOutput(this, `ExportsOutputSSRStaticPolicyId`, {
+      value: staticCachePolicy.cachePolicyId,
+      exportName: `${id}-static-policy-id`,
+    });
+
+    new CfnOutput(this, `ExportsOutputSSRDynamicOrigins`, {
+      value: JSON.stringify([{ url: this.httpApi.apiEndpoint, path: '' }]),
+      exportName: `${id}-dynamic-origins`,
+    });
+
+    new CfnOutput(this, `ExportsOutputSSRStaticPolicyId`, {
+      value: dynamicCachePolicy.cachePolicyId,
+      exportName: `${id}-static-policy-id`,
+    });
   }
 
   private createDistribution(
@@ -263,7 +288,12 @@ export class AWSAdapterStack extends Stack {
     return distribution;
   }
 
-  private createCustomResource(name: string, filePath: string, bucketArn: string, env?: { [key: string]: string }): CustomResource {
+  private createCustomResource(
+    name: string,
+    filePath: string,
+    bucketArn: string,
+    env?: { [key: string]: string }
+  ): CustomResource {
     const customLambda = new Function(this, name, {
       functionName: `${name}`,
       runtime: Runtime.NODEJS_18_X,
@@ -282,12 +312,12 @@ export class AWSAdapterStack extends Stack {
         'cloudfront:GetDistributionConfig',
         'cloudfront:UpdateDistribution',
         's3:GetBucketPolicy',
-        's3:PutBucketPolicy'
+        's3:PutBucketPolicy',
       ],
       resources: [
         `arn:aws:cloudfront::${this.account}:origin-access-control/*`,
         `arn:aws:cloudfront::${this.account}:distribution/*`,
-        bucketArn
+        bucketArn,
       ],
     });
     customLambda.addToRolePolicy(customPermissions);
@@ -308,7 +338,12 @@ export class AWSAdapterStack extends Stack {
     bucketArn: string,
     env?: { [key: string]: string }
   ): IDistribution {
-    this.createCustomResource(`${stackId}-update-distribution`, './custom-resources/update-distribution', bucketArn, env ?? {});
+    this.createCustomResource(
+      `${stackId}-update-distribution`,
+      './custom-resources/update-distribution',
+      bucketArn,
+      env ?? {}
+    );
 
     return Distribution.fromDistributionAttributes(this, `${stackId}-cache`, {
       distributionId,
