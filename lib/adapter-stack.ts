@@ -228,7 +228,7 @@ export class AWSAdapterStack extends Stack {
       exportName: `${id}-dynamic-origins`,
     });
 
-    new CfnOutput(this, `ExportsOutputSSRStaticPolicyId`, {
+    new CfnOutput(this, `ExportsOutputSSRDynamicPolicyId`, {
       value: dynamicCachePolicy.cachePolicyId,
       exportName: `${id}-static-policy-id`,
     });
