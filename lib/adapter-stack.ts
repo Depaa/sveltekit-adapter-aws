@@ -230,7 +230,7 @@ export class AWSAdapterStack extends Stack {
 
     new CfnOutput(this, `ExportsOutputSSRDynamicPolicyId`, {
       value: dynamicCachePolicy.cachePolicyId,
-      exportName: `${id}-static-policy-id`,
+      exportName: `${id}-dynamic-policy-id`,
     });
   }
 
