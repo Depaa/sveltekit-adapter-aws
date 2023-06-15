@@ -1,5 +1,5 @@
 {
-  "name": "@mdepascale/sveltekit-adapter-aws",
+  "name": "@mdepascale/sveltekit-adapter-aws-v2",
   "description": "SvelteKit to deploy your project using AWS CDK.",
   "repository": {
     "type": "git",
